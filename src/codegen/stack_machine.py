@@ -36,20 +36,9 @@ Instruction Set:
     FUNC_START <name>   Mark the start of a function body
     FUNC_END <name>     Mark the end of a function body
     HALT                Stop execution
-
-Standalone usage:
-    python src/codegen/stack_machine.py input.genz
-    python -m src.codegen.stack_machine input.genz
 """
 
-import sys
-from pathlib import Path
-
-# Allow running as a standalone script
-if __name__ == "__main__":
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from Phase2_Syntax.genz_ast import (
+from src.parser.ast import (
     Program, VarDecl, FuncDecl, Assignment, PrintStmt,
     IfStmt, SwitchStmt, WhileStmt, ForStmt, ReturnStmt,
     BreakStmt, ContinueStmt, ExprStmt, Block,
@@ -354,9 +343,10 @@ def generate_stack_code(ast: Program) -> str:
 # =============================================================================
 
 if __name__ == "__main__":
-    from Phase1_Lexical.lexer import tokenize
-    from Phase2_Syntax.parser import Parser
-    from Phase3_Semantic.semantic import SemanticAnalyzer
+    import sys
+    from src.lexer import tokenize
+    from src.parser.parser import Parser
+    from src.semantic.analyzer import SemanticAnalyzer
 
     if len(sys.argv) < 2:
         print("Usage: python src/codegen/stack_machine.py <input.genz>")

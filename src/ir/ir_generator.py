@@ -14,21 +14,9 @@ Three-Address Code format:
     endfunc foo         (function end)
     t2 = call foo(a, b) (function call)
     return t2           (return statement)
-
-Standalone usage:
-    python -m src.ir.ir_generator input.genz
-    python src/ir/ir_generator.py input.genz
 """
 
-import sys
-import os
-from pathlib import Path
-
-# Allow running as a standalone script
-if __name__ == "__main__":
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from Phase2_Syntax.genz_ast import (
+from src.parser.ast import (
     Program, VarDecl, FuncDecl, Assignment, PrintStmt,
     IfStmt, SwitchStmt, WhileStmt, ForStmt, ReturnStmt,
     BreakStmt, ContinueStmt, ExprStmt, Block,
@@ -299,17 +287,13 @@ def generate_ir(ast: Program) -> str:
     return IRGenerator().generate(ast)
 
 
-# =============================================================================
-# Standalone entry point: python src/ir/ir_generator.py input.genz
-# =============================================================================
-
 if __name__ == "__main__":
-    from Phase1_Lexical.lexer import tokenize
-    from Phase2_Syntax.parser import Parser
+    import sys
+    from src.lexer import tokenize
+    from src.parser.parser import Parser
 
     if len(sys.argv) < 2:
         print("Usage: python src/ir/ir_generator.py <input.genz>")
-        print("       python -m src.ir.ir_generator <input.genz>")
         sys.exit(1)
 
     input_file = sys.argv[1]
