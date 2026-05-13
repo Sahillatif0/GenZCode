@@ -1,16 +1,17 @@
-"""Semantic analyzer for GenZ/Brainrot language.
+import sys
+import os
+from pathlib import Path
 
-Semantic Sam's work: type checking, scope management, and validation.
-"""
+# Add root to sys.path so we can find other phases
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from typing import Optional
-from src.parser.ast import (
+from Phase2_Syntax.genz_ast import (
     ASTVisitor, Program, VarDecl, FuncDecl, FuncParam,
     Assignment, PrintStmt, IfStmt, SwitchStmt, WhileStmt, ForStmt, ReturnStmt,
     BreakStmt, ContinueStmt, ExprStmt, Block,
     Binary, Unary, Literal, Variable, ArrayAccess, ArrayLiteral, FuncCall, Expr
 )
-from .symbol_table import SymbolTable, SemanticError, TypeInfo, parse_type
+from Phase3_Semantic.symbol_table import SymbolTable, SemanticError, TypeInfo, parse_type
 
 
 class SemanticAnalyzer(ASTVisitor):
@@ -415,8 +416,8 @@ class SemanticAnalyzer(ASTVisitor):
 
 if __name__ == "__main__":
     import sys
-    from src.lexer import tokenize
-    from src.parser.parser import Parser
+    from Phase1_Lexical.lexer import tokenize
+    from Phase2_Syntax.parser import Parser
 
     if len(sys.argv) > 1:
         with open(sys.argv[1], 'r') as f:

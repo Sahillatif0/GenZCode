@@ -41,19 +41,27 @@ python -m src.main examples/hello.genz -o output.py
 python output.py
 ```
 
-#### Run Individual Compiler Phases:
+#### Run Standalone Compiler Phases (Assignment Requirements):
+Each phase can be run independently using its dedicated script.
+
 ```bash
-# Phase 1: Lexical analysis (tokenize only)
-python -m src.main examples/hello.genz --phase lexer
+# Phase 1: Lexical analysis
+python Phase1_Lexical/lexer.py TestCases/full_test.genz
 
-# Phase 2: Parsing (generate AST only)
-python -m src.main examples/hello.genz --phase parser
+# Phase 2: Parsing (AST)
+python Phase2_Syntax/parser.py TestCases/full_test.genz
 
-# Phase 3: Semantic analysis (symbol table only)
-python -m src.main examples/hello.genz --phase semantic
+# Phase 3: Semantic analysis
+python Phase3_Semantic/semantic.py TestCases/full_test.genz
 
-# Full compilation (default)
-python -m src.main examples/hello.genz
+# Phase 4: Intermediate Code Generation (TAC)
+python Phase4_ICG/ir_generator.py TestCases/full_test.genz
+
+# Phase 5: Optimization
+python Phase5_Optimization/optimizer.py TestCases/full_test.genz
+
+# Phase 6: Code Generation (Stack Machine)
+python Phase6_CodeGeneration/codegen.py TestCases/full_test.genz
 ```
 
 ## GenZ Syntax Examples

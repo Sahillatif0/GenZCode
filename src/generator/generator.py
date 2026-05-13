@@ -395,3 +395,27 @@ class CodeGenerator(ASTVisitor):
 def generate_python(ast: Program) -> str:
     """Convenience function to generate Python code."""
     return CodeGenerator().generate(ast)
+
+
+if __name__ == "__main__":
+    import sys
+    from src.lexer import tokenize
+    from src.parser.parser import Parser
+    from src.semantic.analyzer import SemanticAnalyzer
+
+    if len(sys.argv) > 1:
+        with open(sys.argv[1], 'r') as f:
+            source = f.read()
+    else:
+        source = 'spill_tea("Hello from standalone generator!");'
+
+    try:
+        tokens = tokenize(source)
+        ast = Parser(tokens).parse()
+        SemanticAnalyzer().analyze(ast)
+        code = generate_python(ast)
+        print("--- Generated Python Code ---")
+        print(code)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)

@@ -1,0 +1,11 @@
+lowkey x: num = 10 + 5;
+lowkey y: num = x * 2;
+spill_tea("Result is:", y);
+
+vibe_check calculate(a: num, b: num) {
+    lowkey res: num = a + b;
+    slay res;
+}
+
+lowkey sum: num = calculate(x, y);
+spill_tea("Sum is:", sum);

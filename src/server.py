@@ -7,7 +7,10 @@ from src.lexer import tokenize
 from src.parser.parser import Parser
 from src.interpreter.interpreter import Interpreter
 from src.semantic.analyzer import SemanticAnalyzer
-from src.generator.generator import generate_python, CodeGenerator
+from src.generator.generator import generate_python
+from src.ir.ir_generator import generate_ir
+from src.optimizer.optimizer import optimize_ir
+from src.codegen.stack_machine import generate_stack_code
 from src.parser.ast import Program
 
 app = Flask(__name__)
@@ -186,22 +189,32 @@ def pipeline():
         })
 
         # Stage 5: Optimized IR
-        optimized_ir = optimize_ir(ir_code)
+        optimized_ir, report = optimize_ir(ir_code)
         stages.append({
             'name': 'optimizer',
             'title': 'Optimization Pass',
-            'description': 'The optimization pass applies various compiler optimizations to the intermediate code: constant folding (evaluating constant expressions at compile time), copy propagation, dead code elimination, and strength reduction. These transformations reduce execution time and code size.',
-            'ir_code': optimized_ir,
+            'description': 'The optimization pass applies various compiler optimizations to the intermediate code: constant folding, copy propagation, and dead code elimination.',
+            'ir_code': ir_code,
+            'optimized_ir': optimized_ir,
+            'optimization_report': report.summary(),
             'status': 'success'
         })
 
-        # Stage 6: Code Generation
-        python_code = generate_python(ast)
+        # Stage 6: Code Generation (Target Code)
+        from src.generator.tac_to_python import generate_python_from_ir
+        from src.generator.tac_to_stack import generate_stack_from_ir
+        
+        # We now generate target code from the OPTIMIZED IR instead of the raw AST
+        # to ensure optimizations are reflected in the final output.
+        python_code = generate_python_from_ir(optimized_ir)
+        stack_code = generate_stack_from_ir(optimized_ir)
+        
         stages.append({
             'name': 'generator',
             'title': 'Code Generation',
-            'description': 'The code generator traverses the validated AST and emits equivalent Python code. It maps GenZ constructs to Python: lowkey becomes variable assignment, sus becomes if, keep_yapping becomes while, vibe_check becomes def, and brainrot builtins become Python helper functions.',
+            'description': 'The code generator now consumes the Optimized IR to emit efficient Python and Stack Machine code. Redundant logic identified during optimization is removed from the final target.',
             'python_code': python_code,
+            'stack_code': stack_code,
             'status': 'success'
         })
 
@@ -212,7 +225,7 @@ def pipeline():
         stages.append({
             'name': 'interpreter',
             'title': 'Execution (Interpretation)',
-            'description': 'The interpreter walks the AST and executes it directly without compiling to machine code. It maintains an environment for variable storage, handles function calls with closures, evaluates expressions with proper operator semantics, and produces program output.',
+            'description': 'The interpreter walks the AST and executes it directly without compiling to machine code.',
             'output': execution_output,
             'status': 'success'
         })
@@ -232,244 +245,19 @@ def pipeline():
 
 
 # =============================================================================
-# Intermediate Code Generation (TAC - Three Address Code)
+# =============================================================================
+# Helper functions for the web pipeline
 # =============================================================================
 
-class IRGenerator:
-    """Generate Three-Address Code (TAC) intermediate representation."""
+def get_ir(ast):
+    return generate_ir(ast)
 
-    def __init__(self):
-        self.instructions: list[str] = []
-        self.temp_count = 0
-        self.label_count = 0
+def get_optimized_ir(ir_code):
+    optimized, _ = optimize_ir(ir_code)
+    return optimized
 
-    def new_temp(self) -> str:
-        t = f"t{self.temp_count}"
-        self.temp_count += 1
-        return t
-
-    def new_label(self) -> str:
-        l = f"L{self.label_count}"
-        self.label_count += 1
-        return l
-
-    def emit(self, code: str) -> None:
-        self.instructions.append(code)
-
-    def generate(self, ast: Program) -> str:
-        self.instructions = []
-        self.temp_count = 0
-        self.label_count = 0
-        self._visit_program(ast)
-        return '\n'.join(self.instructions)
-
-    def _visit_program(self, node: Program) -> None:
-        for stmt in node.statements:
-            self._visit(stmt)
-
-    def _visit(self, node) -> None:
-        method = f"_visit_{type(node).__name__}"
-        if hasattr(self, method):
-            return getattr(self, method)(node)
-        return None
-
-    def _visit_VarDecl(self, node) -> None:
-        if node.initializer:
-            result = self._visit_expr(node.initializer)
-            self.emit(f"{node.name} = {result}")
-
-    def _visit_FuncDecl(self, node) -> None:
-        self.emit(f"func {node.name}")
-        if node.body:
-            for stmt in node.body.statements:
-                self._visit(stmt)
-        self.emit(f"endfunc {node.name}")
-
-    def _visit_PrintStmt(self, node) -> None:
-        for arg in node.arguments:
-            result = self._visit_expr(arg)
-            self.emit(f"print {result}")
-
-    def _visit_IfStmt(self, node) -> None:
-        cond = self._visit_expr(node.condition)
-        label_else = self.new_label()
-        label_end = self.new_label()
-        self.emit(f"ifnot {cond} goto {label_else}")
-        if node.then_branch:
-            self._visit(node.then_branch)
-        self.emit(f"goto {label_end}")
-        self.emit(f"{label_else}:")
-        if node.else_branch:
-            self._visit(node.else_branch)
-        self.emit(f"{label_end}:")
-
-    def _visit_WhileStmt(self, node) -> None:
-        label_start = self.new_label()
-        label_end = self.new_label()
-        self.emit(f"{label_start}:")
-        cond = self._visit_expr(node.condition)
-        self.emit(f"ifnot {cond} goto {label_end}")
-        if node.body:
-            self._visit(node.body)
-        self.emit(f"goto {label_start}")
-        self.emit(f"{label_end}:")
-
-    def _visit_ForStmt(self, node) -> None:
-        label_start = self.new_label()
-        label_end = self.new_label()
-        if node.init:
-            self._visit(node.init)
-        self.emit(f"{label_start}:")
-        if node.condition:
-            cond = self._visit_expr(node.condition)
-            self.emit(f"ifnot {cond} goto {label_end}")
-        if node.body:
-            self._visit(node.body)
-        if node.update:
-            result = self._visit_expr(node.update)
-            self.emit(result)
-        self.emit(f"goto {label_start}")
-        self.emit(f"{label_end}:")
-
-    def _visit_ReturnStmt(self, node) -> None:
-        if node.value:
-            result = self._visit_expr(node.value)
-            self.emit(f"return {result}")
-        else:
-            self.emit("return")
-
-    def _visit_BreakStmt(self, node) -> None:
-        self.emit("goto endloop")
-
-    def _visit_ContinueStmt(self, node) -> None:
-        self.emit("goto loopstart")
-
-    def _visit_ExprStmt(self, node) -> None:
-        self._visit_expr(node.expression)
-
-    def _visit_Block(self, node) -> None:
-        for stmt in node.statements:
-            self._visit(stmt)
-
-    def _visit_SwitchStmt(self, node) -> None:
-        expr = self._visit_expr(node.expression)
-        end_label = self.new_label()
-        for case_val, case_stmts in node.cases:
-            cv = self._visit_expr(case_val)
-            label_case = self.new_label()
-            self.emit(f"if {expr} == {cv} goto {label_case}")
-            for stmt in case_stmts:
-                self._visit(stmt)
-            self.emit(f"goto {end_label}")
-            self.emit(f"{label_case}:")
-        if node.default:
-            for stmt in node.default:
-                self._visit(stmt)
-        self.emit(f"{end_label}:")
-
-    def _visit_Assignment(self, node) -> None:
-        result = self._visit_expr(node.value)
-        target = self._visit_expr(node.target)
-        self.emit(f"{target} = {result}")
-
-    def _visit_expr(self, expr) -> str:
-        method = f"_expr_{type(expr).__name__}"
-        if hasattr(self, method):
-            return getattr(self, method)(expr)
-        return str(expr.value if hasattr(expr, 'value') else expr)
-
-    def _expr_Literal(self, expr) -> str:
-        if isinstance(expr.value, str):
-            return f'"{expr.value}"'
-        return str(expr.value)
-
-    def _expr_Variable(self, expr) -> str:
-        return expr.name
-
-    def _expr_ArrayAccess(self, expr) -> str:
-        arr = self._visit_expr(expr.array)
-        idx = self._visit_expr(expr.index)
-        t = self.new_temp()
-        self.emit(f"{t} = {arr}[{idx}]")
-        return t
-
-    def _expr_ArrayLiteral(self, expr) -> str:
-        elements = [self._visit_expr(e) for e in expr.elements]
-        return f"[{', '.join(elements)}]"
-
-    def _expr_Binary(self, expr) -> str:
-        left = self._visit_expr(expr.left)
-        right = self._visit_expr(expr.right)
-        t = self.new_temp()
-        self.emit(f"{t} = {left} {expr.operator} {right}")
-        return t
-
-    def _expr_Unary(self, expr) -> str:
-        operand = self._visit_expr(expr.operand)
-        t = self.new_temp()
-        self.emit(f"{t} = {expr.operator}{operand}")
-        return t
-
-    def _expr_FuncCall(self, expr) -> str:
-        args = [self._visit_expr(a) for a in expr.arguments]
-        t = self.new_temp()
-        self.emit(f"{t} = call {expr.name}({', '.join(args)})")
-        return t
-
-    def _expr_Assignment(self, expr) -> str:
-        result = self._visit_expr(expr.value)
-        target = self._visit_expr(expr.target)
-        self.emit(f"{target} = {result}")
-        return target
-
-
-def generate_ir(ast: Program) -> str:
-    """Generate three-address code from AST."""
-    return IRGenerator().generate(ast)
-
-
-def optimize_ir(ir_code: str) -> str:
-    """Apply simple optimizations to TAC code."""
-    lines = ir_code.split('\n')
-    optimized = []
-    used_vars = set()
-    const_folds = {}
-
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith('#') or stripped.startswith('func'):
-            optimized.append(line)
-            continue
-
-        # Detect constant assignments
-        import re
-        assign_match = re.match(r'^(\w+)\s*=\s*(.+)$', stripped)
-        if assign_match:
-            var_name, expr = assign_match.groups()
-            # Check for simple constant folding
-            const_match = re.match(r'^\s*"?(-?\d+\.?\d*)"?\s*$', expr.strip())
-            if const_match:
-                const_folds[var_name] = const_match.group(1)
-                optimized.append(line)
-                continue
-            # Copy propagation check
-            if expr.strip() in const_folds:
-                optimized.append(f"{var_name} = {const_folds[expr.strip()]}  # copy propagation")
-                continue
-
-        # Dead code elimination - skip pure assignments that are never used
-        if 'print' in stripped or 'if' in stripped or 'goto' in stripped or 'return' in stripped:
-            # Mark variables in conditionals as used
-            for var in const_folds:
-                if var in stripped:
-                    used_vars.add(var)
-            optimized.append(line)
-        elif 'call' in stripped or '[' in stripped:
-            optimized.append(line)
-        else:
-            optimized.append(line)
-
-    return '\n'.join(optimized)
+def get_stack_code(ast):
+    return generate_stack_code(ast)
 
 
 @app.route('/phase', methods=['POST'])
@@ -538,11 +326,12 @@ def run_phase():
             ast = Parser(tokens).parse()
             SemanticAnalyzer().analyze(ast)
             ir = generate_ir(ast)
-            optimized = optimize_ir(ir)
+            optimized, report = optimize_ir(ir)
             return jsonify({
                 'phase': 'optimizer',
                 'ir_code': ir,
                 'optimized_ir': optimized,
+                'optimization_report': report.summary(),
                 'status': 'success'
             })
 
@@ -551,9 +340,11 @@ def run_phase():
             ast = Parser(tokens).parse()
             SemanticAnalyzer().analyze(ast)
             python_code = generate_python(ast)
+            stack_code = generate_stack_code(ast)
             return jsonify({
                 'phase': 'generator',
                 'python_code': python_code,
+                'stack_code': stack_code,
                 'status': 'success'
             })
 
