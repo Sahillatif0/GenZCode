@@ -47,37 +47,60 @@ def ast_to_dict(node):
     return str(node)
 
 def symbol_table_to_dict(st, include_builtins: bool = True):
-    """Convert symbol table to serializable dictionary."""
+    """Convert symbol table to serializable dictionary with proper categorization."""
     scopes = []
     current = st.current_scope
-    builtin_names = {
-        'print', 'len', 'str', 'num', 'range', 'abs', 'pow', 'sqrt',
-        'input', 'int', 'float', 'bool', 'list', 'max', 'min', 'sum'
-    }
-    while current:
-        scope_data = {
-            'name': current.name,
-            'symbols': {}
+    # Get actual built-in names from the symbol table's _builtin_names set
+    builtin_names = getattr(st, '_builtin_names', set())
+    # Fallback to hardcoded list if _builtin_names doesn't exist
+    if not builtin_names:
+        builtin_names = {
+            'print', 'len', 'str', 'num', 'range', 'abs', 'pow', 'sqrt',
+            'input', 'int', 'float', 'bool', 'list', 'max', 'min', 'sum',
+            'ohio', 'grimace_shake', 'mewing', 'rizz', 'fanum_tax', 'ballerina_cappuccina'
         }
+
+    # Collect symbols grouped by type
+    user_variables = {}
+    user_functions = {}
+    builtin_functions = {}
+
+    while current:
         for name, symbol in current.symbols.items():
-            # Filter out built-in functions unless include_builtins is True
-            if not include_builtins and symbol.is_function and name in builtin_names:
-                continue
             sym_data = {
                 'name': symbol.name,
                 'type': str(symbol.type_info),
                 'is_function': symbol.is_function,
                 'is_variadic': symbol.is_variadic,
-                'is_builtin': symbol.is_function and name in builtin_names,
+                'is_builtin': name in builtin_names,
                 'defined': symbol.defined,
             }
             if symbol.is_function:
                 sym_data['param_types'] = [str(pt) for pt in symbol.param_types]
                 sym_data['return_type'] = str(symbol.return_type) if symbol.return_type else None
-            scope_data['symbols'][name] = sym_data
-        scopes.append(scope_data)
-        current = current.parent
-    return {'scopes': list(reversed(scopes))}
+
+            # Categorize properly
+            if name in builtin_names:
+                builtin_functions[name] = sym_data
+            elif symbol.is_function:
+                user_functions[name] = sym_data
+            else:
+                user_variables[name] = sym_data
+
+        # Only process global scope for now (user symbols)
+        break
+
+    # Build scopes with categorized symbols
+    global_scope_data = {
+        'name': 'global',
+        'symbols': {},
+        'user_variables': list(user_variables.values()),
+        'user_functions': list(user_functions.values()),
+        'builtin_functions': list(builtin_functions.values()) if include_builtins else []
+    }
+    scopes.append(global_scope_data)
+
+    return {'scopes': scopes}
 
 @app.route('/')
 def index():

@@ -77,10 +77,13 @@ class SymbolTable:
         self.global_scope = Scope(name="global")
         self.current_scope = self.global_scope
         self.loop_depth = 0  # Track nested loops for break/continue
+        self._scope_history: list[Scope] = []  # Keep all scopes for inspection
+        self._builtin_names: set[str] = set()  # Track which functions are builtins
 
     def push_scope(self, name: str = "local") -> Scope:
         """Enter a new scope."""
         new_scope = Scope(parent=self.current_scope, name=name)
+        self._scope_history.append(new_scope)
         self.current_scope = new_scope
         return new_scope
 
@@ -100,11 +103,12 @@ class SymbolTable:
         return symbol
 
     def define_function(self, name: str, return_type: Optional[TypeInfo],
-                       param_types: list[TypeInfo], is_variadic: bool = False) -> Symbol:
+                       param_types: list[TypeInfo], is_variadic: bool = False,
+                       is_builtin: bool = False) -> Symbol:
         """Define a function (in global scope)."""
         # Check if already defined
         existing = self.global_scope.lookup(name)
-        if existing and existing.is_function and existing.defined:
+        if existing and existing.is_function and existing.defined and not is_builtin:
             raise SemanticError(f"Function '{name}' already defined")
 
         symbol = Symbol(
@@ -117,6 +121,8 @@ class SymbolTable:
             return_type=return_type
         )
         self.global_scope.define(symbol)
+        if is_builtin:
+            self._builtin_names.add(name)
         return symbol
 
     def lookup(self, name: str) -> Optional[Symbol]:
@@ -138,6 +144,89 @@ class SymbolTable:
     def in_loop(self) -> bool:
         """Check if currently inside a loop."""
         return self.loop_depth > 0
+
+    def get_variables(self) -> list[dict]:
+        """Get all user-defined variables from global scope."""
+        variables = []
+        for name, symbol in self.global_scope.symbols.items():
+            if not symbol.is_function:
+                variables.append({
+                    'name': name,
+                    'type': str(symbol.type_info),
+                    'is_constant': symbol.is_constant
+                })
+        return variables
+
+    def get_functions(self) -> list[dict]:
+        """Get all user-defined functions from global scope."""
+        functions = []
+        for name, symbol in self.global_scope.symbols.items():
+            if symbol.is_function and name not in self._builtin_names:
+                param_types = [str(pt) for pt in symbol.param_types]
+                return_type = str(symbol.return_type) if symbol.return_type else "void"
+                functions.append({
+                    'name': name,
+                    'params': param_types,
+                    'return_type': return_type,
+                    'is_variadic': symbol.is_variadic
+                })
+        return functions
+
+    def get_builtins(self) -> list[dict]:
+        """Get all built-in functions."""
+        builtins = [
+            {'name': 'print', 'params': ['...'], 'return_type': 'void', 'is_builtin': True},
+            {'name': 'len', 'params': ['txt/num[]'], 'return_type': 'num', 'is_builtin': True},
+            {'name': 'str', 'params': ['num'], 'return_type': 'txt', 'is_builtin': True},
+            {'name': 'num', 'params': ['txt'], 'return_type': 'num', 'is_builtin': True},
+            {'name': 'range', 'params': ['num', 'num'], 'return_type': 'num[]', 'is_builtin': True},
+            {'name': 'abs', 'params': ['num'], 'return_type': 'num', 'is_builtin': True},
+            {'name': 'pow', 'params': ['num', 'num'], 'return_type': 'num', 'is_builtin': True},
+            {'name': 'sqrt', 'params': ['num'], 'return_type': 'num', 'is_builtin': True},
+            {'name': 'input', 'params': [], 'return_type': 'txt', 'is_builtin': True},
+            {'name': 'ohio', 'params': [], 'return_type': 'void', 'is_builtin': True},
+            {'name': 'grimace_shake', 'params': [], 'return_type': 'void', 'is_builtin': True},
+            {'name': 'mewing', 'params': ['num'], 'return_type': 'void', 'is_builtin': True},
+            {'name': 'rizz', 'params': ['num'], 'return_type': 'num', 'is_builtin': True},
+            {'name': 'fanum_tax', 'params': ['num'], 'return_type': 'num', 'is_builtin': True},
+            {'name': 'ballerina_cappuccina', 'params': [], 'return_type': 'txt', 'is_builtin': True},
+        ]
+        return builtins
+
+    def get_all_symbols(self) -> dict:
+        """Get complete symbol table data for UI display."""
+        return {
+            'variables': self.get_variables(),
+            'functions': self.get_functions(),
+            'builtins': self.get_builtins()
+        }
+
+    def to_display_string(self) -> str:
+        """Generate a string representation for display."""
+        lines = []
+        variables = self.get_variables()
+        functions = self.get_functions()
+        builtins = self.get_builtins()
+
+        if variables:
+            lines.append("Variables:")
+            for v in variables:
+                const_marker = " (constant)" if v.get('is_constant') else ""
+                lines.append(f"  {v['name']}: {v['type']}{const_marker}")
+
+        if functions:
+            lines.append("\nFunctions:")
+            for f in functions:
+                params = ", ".join(f['params']) if f['params'] else "()"
+                lines.append(f"  {f['name']}({params}) -> {f['return_type']}")
+
+        if builtins:
+            lines.append("\nBuilt-in Functions:")
+            for b in builtins:
+                params = ", ".join(b['params']) if b['params'] else "()"
+                lines.append(f"  {b['name']}({params}) -> {b['return_type']}")
+
+        return "\n".join(lines) if lines else "No symbols defined"
 
 
 class SemanticError(Exception):
