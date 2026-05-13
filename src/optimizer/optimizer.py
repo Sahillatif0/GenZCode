@@ -451,9 +451,10 @@ def optimize_ir(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    from Phase1_Lexical.lexer import tokenize
-    from Phase2_Syntax.parser import Parser
-    from Phase4_ICG.ir_generator import generate_ir
+    import sys
+    from src.lexer import tokenize
+    from src.parser.parser import Parser
+    from src.ir.ir_generator import generate_ir
 
     if len(sys.argv) < 2:
         print("Usage: python src/optimizer/optimizer.py <input.genz>")

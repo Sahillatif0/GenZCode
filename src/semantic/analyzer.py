@@ -70,7 +70,8 @@ class SemanticAnalyzer(ASTVisitor):
             name=name,
             return_type=TypeInfo(base_type="num"),
             param_types=param_types,
-            is_variadic=is_variadic
+            is_variadic=is_variadic,
+            is_builtin=True
         )
 
     def _register_builtins(self) -> None:
@@ -424,6 +425,7 @@ if __name__ == "__main__":
     else:
         source = '''
             lowkey x: num = 42;
+            lowkey name: txt = "bruh";
             vibe_check main() {
                 spill_tea(x);
             }
@@ -435,14 +437,8 @@ if __name__ == "__main__":
         analyzer = SemanticAnalyzer()
         symbol_table = analyzer.analyze(ast)
         print("Semantic analysis passed!")
-        print("Symbol Table:")
-        # Simple print of symbol table names
-        scope = symbol_table.global_scope
-        while scope:
-            print(f"Scope: {scope.name}")
-            for name, sym in scope.symbols.items():
-                print(f"  {name}: {sym.type_info}")
-            scope = None # Just global for simple demo
+        print()
+        print(symbol_table.to_display_string())
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

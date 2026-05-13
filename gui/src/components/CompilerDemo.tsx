@@ -743,56 +743,91 @@ export default function CompilerDemo() {
                   {symTable ? (
                     <div className="flex flex-col gap-4">
                       {symTable.scopes.map((scope, i) => {
-                        const userSymbols = Object.values(scope.symbols).filter((s: any) => !s.is_builtin);
-                        const builtinSymbols = Object.values(scope.symbols).filter((s: any) => s.is_builtin);
+                        const userVariables = scope.user_variables || [];
+                        const userFunctions = scope.user_functions || [];
+                        const builtinFunctions = scope.builtin_functions || [];
                         return (
                         <div key={i} className="flex flex-col gap-2 p-4 rounded-xl border border-emerald-500/10 bg-emerald-500/[0.02]">
                           <div className="flex items-center gap-2">
                             <ShieldCheck size={14} className="text-emerald-400" />
                             <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">{scope.name} Scope</span>
-                            <span className="text-[10px] text-zinc-600">{userSymbols.length} user symbols</span>
                           </div>
 
-                          {/* User-defined symbols */}
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
-                              <thead>
-                                <tr className="border-b border-white/5">
-                                  <th className="text-left py-2 px-3 text-zinc-500 font-medium">Name</th>
-                                  <th className="text-left py-2 px-3 text-zinc-500 font-medium">Type</th>
-                                  <th className="text-left py-2 px-3 text-zinc-500 font-medium">Kind</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {userSymbols.length > 0 ? userSymbols.map((sym: any, j) => (
-                                  <tr key={j} className="border-b border-white/5 hover:bg-white/[0.02]">
-                                    <td className="py-2 px-3 font-mono text-zinc-200">{sym.name}</td>
-                                    <td className="py-2 px-3">
-                                      <span className="px-1.5 py-0.5 rounded bg-white/5 text-cyan-400 font-mono text-[10px]">{sym.type}</span>
-                                    </td>
-                                    <td className="py-2 px-3 text-zinc-400">{sym.is_function ? "Function" : "Variable"}</td>
-                                  </tr>
-                                )) : (
-                                  <tr>
-                                    <td colSpan={3} className="py-2 px-3 text-zinc-600 text-center italic">No user-defined symbols</td>
-                                  </tr>
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
+                          {/* User Variables */}
+                          {userVariables.length > 0 && (
+                            <div className="mt-2">
+                              <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Variables</div>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="border-b border-white/5">
+                                      <th className="text-left py-2 px-3 text-zinc-500 font-medium">Name</th>
+                                      <th className="text-left py-2 px-3 text-zinc-500 font-medium">Type</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {userVariables.map((sym: any, j) => (
+                                      <tr key={j} className="border-b border-white/5 hover:bg-white/[0.02]">
+                                        <td className="py-2 px-3 font-mono text-zinc-200">{sym.name}</td>
+                                        <td className="py-2 px-3">
+                                          <span className="px-1.5 py-0.5 rounded bg-white/5 text-cyan-400 font-mono text-[10px]">{sym.type}</span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* User Functions */}
+                          {userFunctions.length > 0 && (
+                            <div className="mt-2">
+                              <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Functions</div>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="border-b border-white/5">
+                                      <th className="text-left py-2 px-3 text-zinc-500 font-medium">Name</th>
+                                      <th className="text-left py-2 px-3 text-zinc-500 font-medium">Parameters</th>
+                                      <th className="text-left py-2 px-3 text-zinc-500 font-medium">Return Type</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {userFunctions.map((sym: any, j) => (
+                                      <tr key={j} className="border-b border-white/5 hover:bg-white/[0.02]">
+                                        <td className="py-2 px-3 font-mono text-zinc-200">{sym.name}</td>
+                                        <td className="py-2 px-3 text-zinc-400">{sym.param_types?.join(", ") || "()"}</td>
+                                        <td className="py-2 px-3">
+                                          <span className="px-1.5 py-0.5 rounded bg-white/5 text-violet-400 font-mono text-[10px]">{sym.return_type || "void"}</span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* No user symbols message */}
+                          {userVariables.length === 0 && userFunctions.length === 0 && (
+                            <div className="py-4 text-center text-zinc-600 text-xs italic">
+                              No user-defined symbols in this scope
+                            </div>
+                          )}
 
                           {/* Built-in functions (collapsed by default) */}
-                          {builtinSymbols.length > 0 && (
+                          {builtinFunctions.length > 0 && (
                             <details className="mt-2">
                               <summary className="text-[10px] text-zinc-500 cursor-pointer hover:text-zinc-400">
-                                + {builtinSymbols.length} built-in functions (click to expand)
+                                + {builtinFunctions.length} built-in functions (click to expand)
                               </summary>
                               <div className="mt-2 overflow-x-auto">
                                 <table className="w-full text-xs">
                                   <tbody>
-                                    {builtinSymbols.map((sym: any, j) => (
+                                    {builtinFunctions.map((sym: any, j) => (
                                       <tr key={j} className="border-b border-white/5 opacity-60">
-                                        <td className="py-2 px-3 font-mono text-zinc-400">{sym.name}()</td>
+                                        <td className="py-2 px-3 font-mono text-zinc-400">{sym.name}({sym.param_types?.join(", ") || ""})</td>
                                         <td className="py-2 px-3 text-zinc-500 text-[10px]">{sym.return_type || "any"}</td>
                                       </tr>
                                     ))}
